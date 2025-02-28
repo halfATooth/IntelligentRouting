@@ -1,23 +1,24 @@
-#include "communication.h"
-#include <cstring>
-using namespace ns3;
+#include "shared-memory.h"
+
+namespace ns3
+{
 
 int CommunicateWithAIModule::createOrOpenSharedMemory(BlockInfo& info){
   int fd = shm_open(info.name, O_CREAT | O_RDWR, 0666);
   if (fd == -1) {
-      perror("shm_open");
-      return 1;
+    std::cout<< "create shm_open err: " << info.name << std::endl;
+    return 1;
   }
   if (ftruncate(fd, info.size) == -1) {
-      perror("ftruncate");
-      close(fd);
-      return 1;
+    std::cout<< "create ftruncate err: " << info.name << std::endl;
+    close(fd);
+    return 1;
   }
   char* shared_memory = static_cast<char*>(mmap(nullptr, info.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
   if (shared_memory == MAP_FAILED) {
-      perror("mmap");
-      close(fd);
-      return 1;
+    std::cout<< "create mmap err: " << info.name << std::endl;
+    close(fd);
+    return 1;
   }
   info.fd = fd;
   info.sharedMemory = shared_memory;
@@ -38,7 +39,7 @@ void CommunicateWithAIModule::freeSharedMemory(BlockInfo info){
 }
 
 CommunicateWithAIModule::CommunicateWithAIModule(
-  Callback<char*> collectNetInfo, 
+  Callback<std::string> collectNetInfo, 
   Callback<void, std::string> updateRouting
 ): CollectNetInfo(collectNetInfo), UpdateRouting(updateRouting){
   // open shared memory of data block
@@ -51,46 +52,40 @@ CommunicateWithAIModule::CommunicateWithAIModule(
   if(createOrOpenSharedMemory(ctrlBlockInfo) != 0){
     return;
   }
+  printf("memory ready\n");
 }
 
 CommunicateWithAIModule::~CommunicateWithAIModule(){
+  std::cout << "~CommunicateWithAIModule" << std::endl;
   freeSharedMemory(ctrlBlockInfo);
   freeSharedMemory(dataBlockInfo);
 }
 
 std::string CommunicateWithAIModule::readSharedMemory(BlockInfo info, int len){
   if (info.sharedMemory == MAP_FAILED) {
-    perror("err occurred while reading");
+    std::cout<< "read shm_open err: " << info.name << std::endl;
     close(info.fd);
     return "";
   }
   return getSubstring(info.sharedMemory, len);
 }
 
-int CommunicateWithAIModule::writeSharedMemory(char* data, BlockInfo info){
-  strncpy(info.sharedMemory, data, strlen(data));
-}
-
-std::string getSubstring(const char* str, int n) {
+std::string CommunicateWithAIModule::getSubstring(const char* str, int n) {
   if (str == nullptr) {
     return "";
   }
-  int len = strlen(str);
+  int len = std::string(str).length();
   n = (n < len)? n : len;
   std::string result(str, n);
   return result;
 }
 
-char* getPaddedMod(const char* str, const char* mod) {
-  size_t length = strlen(str);
+std::string getPaddedMod(std::string str, const char* mod) {
+  int length = str.length();
   // 格式化
   std::ostringstream oss;
   oss << mod <<"/" << std::setfill('0') << std::setw(8) << length;
-  // 将格式化后的字符串复制到动态分配的内存中
-  std::string resultStr = oss.str();
-  char* result = new char[resultStr.length() + 1];
-  strcpy(result, resultStr.c_str());
-  return result;
+  return oss.str();
 }
 
 int extractNumberAfterSlash(const std::string& input) {
@@ -135,22 +130,32 @@ void CommunicateWithAIModule::Listen(){
     int len = extractNumberAfterSlash(modSlashLen);
     std::string data = readSharedMemory(dataBlockInfo, len);
     UpdateRouting(data);
-    Simulator::Schedule(Seconds(2.0), &CollectAndSend, this);
+    Simulator::Schedule(Seconds(5.0), &CommunicateWithAIModule::CollectAndSend, this);
   }else{
-    Simulator::Schedule(MilliSeconds(50), &Listen, this);
+    Simulator::Schedule(MilliSeconds(50), &CommunicateWithAIModule::Listen, this);
   }
-  
 }
 
 void CommunicateWithAIModule::CollectAndSend(){
   if(!CollectNetInfo.IsNull()){
-    char* data = CollectNetInfo();
-    writeSharedMemory(data, dataBlockInfo);
-    writeSharedMemory(getPaddedMod(data, "ai"), ctrlBlockInfo);
-    Simulator::Schedule(MilliSeconds(50), &Listen, this);
+    std::string data = CollectNetInfo();
+    writeSharedMemory(dataBlockInfo.sharedMemory, data);
+    writeSharedMemory(ctrlBlockInfo.sharedMemory, getPaddedMod(data, "ai"));
+    Simulator::Schedule(MilliSeconds(50), &CommunicateWithAIModule::Listen, this);
+  }else{
+    printf("CollectNetInfo.IsNull\n");
   }
 }
 
 void CommunicateWithAIModule::Start(){
-  Simulator::Schedule(Seconds(0.5), &CollectAndSend, this);
+  Simulator::Schedule(Seconds(0.1), &CommunicateWithAIModule::CollectAndSend, this);
 }
+
+void CommunicateWithAIModule::writeSharedMemory(char* shm, std::string data){
+  std::cout<<"write: "<<data<<std::endl;
+  for(int i=0; i<data.length(); i++){
+    shm[i] = data[i];
+  }
+}
+
+} // namespace ns3

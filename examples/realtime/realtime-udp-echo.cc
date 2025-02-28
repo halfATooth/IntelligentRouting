@@ -39,7 +39,7 @@ main(int argc, char* argv[])
     // that.
     //
     GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::RealtimeSimulatorImpl"));
-
+    LogComponentEnable ("RealtimeUdpEchoExample", LOG_LEVEL_INFO);
     //
     // Explicitly create the nodes required by the topology (shown above).
     //

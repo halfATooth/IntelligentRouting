@@ -24,10 +24,11 @@ main(int argc, char* argv[])
 {
     CommandLine cmd(__FILE__);
     cmd.Parse(argc, argv);
-
+    GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::RealtimeSimulatorImpl"));
     Time::SetResolution(Time::NS);
     LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
     LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
+    LogComponentEnable ("FirstScriptExample", LOG_LEVEL_INFO);
 
     NodeContainer nodes;
     nodes.Create(2);
@@ -62,7 +63,10 @@ main(int argc, char* argv[])
     clientApps.Start(Seconds(2));
     clientApps.Stop(Seconds(10));
 
+    NS_LOG_INFO("start");
+    Simulator::Stop(Seconds(11));
     Simulator::Run();
     Simulator::Destroy();
+    NS_LOG_INFO("end");
     return 0;
 }

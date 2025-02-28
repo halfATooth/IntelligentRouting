@@ -1,3 +1,6 @@
+#ifndef SHARED_MEMORY_H
+#define SHARED_MEMORY_H
+
 #include <iostream>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -7,9 +10,14 @@
 #include <iomanip>
 #include <sstream>
 #include "ns3/core-module.h"
+// Add a doxygen group for this module.
+// If you have more than one file, this should be in only one of them.
+/**
+ * @defgroup shared-memory Description of the shared-memory
+ */
 
-using namespace ns3;
-
+namespace ns3
+{
 struct BlockInfo
 {
   int fd; // shm obj
@@ -29,18 +37,23 @@ private:
   int interval = 50; // ms
   BlockInfo dataBlockInfo;
   BlockInfo ctrlBlockInfo;
-  Callback<char*> CollectNetInfo;
+  Callback<std::string> CollectNetInfo;
   Callback<void, std::string> UpdateRouting;
 
   int createOrOpenSharedMemory(BlockInfo& info);
   void freeSharedMemory(BlockInfo info);
   std::string readSharedMemory(BlockInfo info, int len);
-  int writeSharedMemory(char* data, BlockInfo info);
   void CollectAndSend();
   void Listen();
+  std::string getSubstring(const char* str, int n);
+  void writeSharedMemory(char* shm, std::string data);
 
 public:
-  CommunicateWithAIModule(Callback<char*> CollectNetInfo, Callback<void, std::string> UpdateRouting);
+  CommunicateWithAIModule(Callback<std::string> CollectNetInfo, Callback<void, std::string> UpdateRouting);
   ~CommunicateWithAIModule();
   void Start();
 };
+
+} // namespace ns3
+
+#endif // SHARED_MEMORY_H

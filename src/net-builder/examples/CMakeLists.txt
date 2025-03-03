@@ -8,4 +8,5 @@ build_lib_example(
       ${libinternet}
       ${libapplications}
       ${libflow-monitor}
+      ${libcentral-controller}
 )

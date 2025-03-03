@@ -3,6 +3,10 @@
 namespace ns3
 {
 
+std::vector<std::vector<LinkState>> NetBuilder::linkStates;
+std::map<std::string, int> NetBuilder::ipStrToNodeIndex;
+std::vector<std::vector<std::vector<int>>> NetBuilder::nodeInterfaces;
+
 void
 NetBuilder::init(int n)
 {
@@ -18,6 +22,7 @@ NetBuilder::init(int n)
         std::vector<std::vector<int>> v;
         nodeInterfaces.push_back(v);
     }
+    linkStates = std::vector<std::vector<LinkState>>(n, std::vector<LinkState>(n, {0, 0, 0, 0, 0}));
 }
 
 void
@@ -63,135 +68,25 @@ NetBuilder::getIpBase()
     return "10.0." + std::to_string(networkNumCt++) + ".0";
 }
 
-void
-NetBuilder::ComputePacketDelay(Ptr<FlowMonitor> fm)
+std::string
+NetBuilder::getIpString(Ipv4Address ip)
 {
-    // 获取统计结果
-    FlowMonitor::FlowStatsContainer flowStats = fm->GetFlowStats();
-    double delaySum = 0.0;
-    int packetnum = 0;
-    // 计算每个流的数据包时延
-    for (auto it : flowStats)
-    {
-        if (it.second.txPackets > 0 && it.second.rxPackets > 0)
-        {
-            // 计算平均时延
-            packetnum += it.second.rxPackets;
-            delaySum += it.second.delaySum.GetSeconds();
-        }
-    }
-    double overallAverageDelay = delaySum / packetnum * 1000;
-    // 计算总体平均包时延
-    std::cout << "Overall Average Packet Delay: " << overallAverageDelay << " ms" << std::endl;
+    std::ostringstream oss;
+    oss << ip;
+    return oss.str();
 }
 
-void
-NetBuilder::ComputePacketLossRate(Ptr<FlowMonitor> fm)
+int
+NetBuilder::getNeighbor(int nodeIndex, int ifIndex)
 {
-    // 获取统计结果
-    FlowMonitor::FlowStatsContainer flowStats = fm->GetFlowStats();
-
-    uint32_t totalSentPackets = 0;
-    uint32_t totalReceivedPackets = 0;
-
-    // 计算每个流的数据包发送和接收数量
-    for (auto it : flowStats)
+    for (auto v : nodeInterfaces[nodeIndex])
     {
-        if (it.second.txPackets > 0)
+        if (v[1] == ifIndex)
         {
-            totalSentPackets += it.second.txPackets;
-            totalReceivedPackets += it.second.rxPackets;
+            return v[0];
         }
     }
-
-    // 计算丢包率
-    uint32_t lostPackets = totalSentPackets - totalReceivedPackets;
-    double packetLossRate = static_cast<double>(lostPackets) / totalSentPackets * 100.0;
-
-    std::cout << "Total Sent Packets: " << totalSentPackets << std::endl;
-    // std::cout << "Total Received Packets: " << totalReceivedPackets << std::endl;
-    // std::cout << "Lost Packets: " << lostPackets << std::endl;
-    std::cout << "Packet Loss Rate: " << packetLossRate << "%" << std::endl;
-}
-
-void
-NetBuilder::ComputeFlowCompleteTime(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm)
-{
-    // 获取统计结果
-    FlowMonitor::FlowStatsContainer flowStats = fm->GetFlowStats();
-    // 计算完成时间
-    double totalThroughput = 0.0;
-    double fct = 0;
-    int validFlows = 0;
-    for (auto it : flowStats)
-    {
-        if (it.second.txBytes > 0)
-        {
-            fct += (it.second.timeLastRxPacket - it.second.timeFirstTxPacket).GetSeconds() *
-                   1e3; // 单位为毫秒
-            validFlows++;
-        }
-    }
-    std::cout << "FCT: " << fct / validFlows << " ms" << std::endl;
-}
-
-void
-NetBuilder::ComputeFlowThroughput(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm)
-{
-    // 获取统计结果
-    FlowMonitor::FlowStatsContainer flowStats = fm->GetFlowStats();
-    // 计算总吞吐量
-    double totalThroughput = 0.0;
-    int validFlows = 0;
-    for (auto it : flowStats)
-    {
-        if (it.second.txBytes > 0)
-        {
-            // 确保时间间隔非零
-            Time duration = it.second.timeLastRxPacket - it.second.timeFirstTxPacket;
-            if (duration.GetSeconds() > 0)
-            {
-                double throughput =
-                    it.second.rxBytes * 8.0 / duration.GetSeconds() / 1024 / 1024; // 比特转换为Mbps
-                totalThroughput += throughput;
-                // std::cout << "Flow ID: " << it.first << ", Throughput: " << throughput << " Mbps"
-                // << std::endl;
-            }
-            validFlows++;
-        }
-    }
-    std::cout << "Total Network Throughput: " << totalThroughput << " Mbps" << std::endl;
-    std::cout << "Avg Network Throughput: " << totalThroughput / validFlows << " Mbps" << std::endl;
-}
-
-void
-NetBuilder::ComputeNetThroughput(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm)
-{
-    // 获取统计结果
-    FlowMonitor::FlowStatsContainer flowStats = fm->GetFlowStats();
-    // 计算总吞吐量
-    double totalrxbyte = 0.0;
-    double lastfct = 0;
-    for (auto it : flowStats)
-    {
-        if (it.second.txBytes > 0)
-        {
-            // 确保时间间隔非零
-            Time duration = it.second.timeLastRxPacket - it.second.timeFirstTxPacket;
-            if (duration.GetSeconds() > 0)
-            {
-                double rxbyte = it.second.txBytes * 8.0; // 比特
-                totalrxbyte += rxbyte;
-            }
-
-            if (it.second.timeLastRxPacket.GetSeconds() > lastfct)
-            {
-                lastfct = it.second.timeLastRxPacket.GetSeconds();
-            }
-        }
-    }
-    std::cout << "Network Throughput: " << totalrxbyte / lastfct / 1024 / 1024 << "Mbps"
-              << std::endl;
+    return -1;
 }
 
 void
@@ -209,6 +104,10 @@ NetBuilder::connect(int i, int j)
     ipv4.SetBase(Ipv4Address(ip.data()), Ipv4Mask("255.255.255.0"));
     Ipv4InterfaceContainer iic = ipv4.Assign(ndc);
     dst = iic.GetAddress(1);
+    // 记录ip对应的节点标号
+    ipStrToNodeIndex[getIpString(iic.GetAddress(0))] = i;
+    ipStrToNodeIndex[getIpString(iic.GetAddress(1))] = j;
+
     // record ip on node
     if (!nodeToIpAddress[i].IsInitialized())
     {
@@ -312,7 +211,6 @@ NetBuilder::run()
     Simulator::Stop(Seconds(5));
     Simulator::Run();
     Simulator::Destroy();
-    ComputePacketDelay(fm);
 }
 
 int
@@ -354,6 +252,41 @@ NetBuilder::installSendApp(int nodeIndex, int destIndex, Time startTime, Time en
 }
 
 void
+NetBuilder::EnableForwardCallback()
+{
+    for (int i = 0; i < c.GetN(); i++)
+    {
+        Ptr<Ipv4L3Protocol> ipv4 = c.Get(i)->GetObject<Ipv4L3Protocol>();
+        if (ipv4)
+        {
+            ipv4->TraceConnectWithoutContext("Tx", MakeBoundCallback(&TxCallback, i));
+            ipv4->TraceConnectWithoutContext("Rx", MakeBoundCallback(&RxCallback, i));
+        }
+    }
+}
+
+void
+NetBuilder::TxCallback(int nodeIndex, Ptr<const Packet> pkt, Ptr<Ipv4> ipv4, uint32_t i)
+{
+    int next = getNeighbor(nodeIndex, i);
+    std::cout << "send: " << nodeIndex << " -> " << next << std::endl;
+    linkStates[nodeIndex][next].dropCount++;
+    linkStates[nodeIndex][next].sendCount++;
+    linkStates[nodeIndex][next].latestSendTime = Simulator::Now().GetMicroSeconds();
+}
+
+void
+NetBuilder::RxCallback(int nodeIndex, Ptr<const Packet> pkt, Ptr<Ipv4> ipv4, uint32_t i)
+{
+    int pre = getNeighbor(nodeIndex, i);
+    std::cout << "rev: " << pre << " -> " << nodeIndex << std::endl;
+    linkStates[pre][nodeIndex].dropCount--;
+    linkStates[pre][nodeIndex].throughput += pkt->GetSize();
+    int64_t delay = Simulator::Now().GetMicroSeconds() - linkStates[pre][nodeIndex].latestSendTime;
+    linkStates[pre][nodeIndex].delay += delay;
+}
+
+void
 NetBuilder::installSendApp(int nodeIndex, int destIndex)
 {
     installSendApp(nodeIndex, destIndex, defaultStartTime, defaultEndTime);
@@ -386,12 +319,21 @@ NetBuilder::installReceiveApp(int nodeIndex, Time startTime, Time endTime)
     ApplicationContainer apps = sink.Install(c.Get(nodeIndex));
     apps.Start(startTime);
     apps.Stop(endTime);
+    // Ptr<PacketSink> sinkApp = DynamicCast<PacketSink> (apps.Get (0));
+    // Callback<void, Ptr<const Packet>, const Address &> callback =
+    // MakeCallback(&NetBuilder::RxCallback, this); sinkApp->TraceConnectWithoutContext ("Rx",
+    // MakeBoundCallback(&NetBuilder::RxCallback, nodeIndex));
 }
 
 void
 NetBuilder::installReceiveApp(int nodeIndex)
 {
     installReceiveApp(nodeIndex, defaultStartTime, defaultEndTime);
+}
+
+std::vector<std::vector<LinkState>> NetBuilder::getLinkStates()
+{
+    return linkStates;
 }
 
 } // namespace ns3

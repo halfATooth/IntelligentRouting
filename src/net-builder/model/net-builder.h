@@ -13,6 +13,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,15 @@
 namespace ns3
 {
 
+struct LinkState
+{
+    int dropCount = 0;
+    int sendCount = 0;
+    int throughput = 0;
+    int64_t latestSendTime = 0; // us
+    int64_t delay = 0;  // us
+};
+
 class NetBuilder
 {
   private:
@@ -34,24 +44,25 @@ class NetBuilder
     int networkNumCt;
     // nodeInterfaces[i][j] = {k, ifindex} means: from node i to node k through port ifindex
     // nodeInterfaces[i].size() means: the num of neighbors of node i
-    std::vector<std::vector<std::vector<int>>> nodeInterfaces;
+    static std::vector<std::vector<std::vector<int>>> nodeInterfaces;
     // not necessary
     Ipv4Address dst;
     // record Ipv4Address on nodes
     std::vector<Ipv4Address> nodeToIpAddress;
+    static std::map<std::string, int> ipStrToNodeIndex;
     Time defaultStartTime = Seconds(0);
     Time defaultEndTime = Seconds(10.0);
     uint16_t port = 9;
+    // 记录链路数据
+    static std::vector<std::vector<LinkState>> linkStates;
 
     void init(int n);
-    void randomRouting();
     int randomPick(std::vector<int> arr);
     std::string getIpBase();
-    void ComputePacketDelay(Ptr<FlowMonitor> fm);
-    void ComputePacketLossRate(Ptr<FlowMonitor> fm);
-    void ComputeFlowCompleteTime(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm);
-    void ComputeFlowThroughput(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm);
-    void ComputeNetThroughput(FlowMonitorHelper& fmHelper, Ptr<FlowMonitor> fm);
+    static std::string getIpString(Ipv4Address ip);
+    static int getNeighbor(int nodeIndex, int ifIndex);
+    static void TxCallback(int nodeIndex, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
+    static void RxCallback(int nodeIndex, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
 
   public:
     NetBuilder()
@@ -63,6 +74,7 @@ class NetBuilder
         init(n);
     }
 
+    void randomRouting();
     void connect(int i, int j);
     void connect(int m[][2], int len);
     void quadConnect(int width);
@@ -78,6 +90,8 @@ class NetBuilder
     void installSendToAllApp(int srcIndex); // use default start/end time
     void installReceiveApp(int nodeIndex, Time startTime, Time endTime);
     void installReceiveApp(int nodeIndex); // use default start/end time
+    void EnableForwardCallback();
+    std::vector<std::vector<LinkState>> getLinkStates();
 };
 
 } // namespace ns3

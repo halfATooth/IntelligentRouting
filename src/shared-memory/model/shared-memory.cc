@@ -148,7 +148,7 @@ void CommunicateWithAIModule::CollectAndSend(){
 }
 
 void CommunicateWithAIModule::Start(){
-  Simulator::Schedule(Seconds(0.1), &CommunicateWithAIModule::CollectAndSend, this);
+  Simulator::Schedule(Seconds(10), &CommunicateWithAIModule::CollectAndSend, this);
 }
 
 void CommunicateWithAIModule::writeSharedMemory(char* shm, std::string data){

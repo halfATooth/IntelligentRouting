@@ -29,7 +29,7 @@ class CentralController
 {
   public:
     CentralController(NetBuilder nb);
-    void AddTopologyInfo(int pairs[][3], int len);
+    void AddTopologyInfo(std::vector<std::vector<int>> pairs, int len);
     std::string CollectNetInfo();
     void UpdateRoutingTable(std::string weightsData);
     void InitRoutingTable();

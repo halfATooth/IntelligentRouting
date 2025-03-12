@@ -7,12 +7,12 @@ CentralController::CentralController(NetBuilder nb)
 {
     netBuilder = nb;
     m_nodes = nb.getNodes();
-    int n = m_nodes.GetN();
-    m_adj = std::vector<std::vector<int>>(n, std::vector<int>(n, -1));
+    m_adj = nb.getAdj();
+    isAdjReady = true;
 }
 
 void
-CentralController::AddTopologyInfo(int pairs[][3], int len)
+CentralController::AddTopologyInfo(std::vector<std::vector<int>> pairs, int len)
 {
     // i, j, w
     for (int i = 0; i < len; i++)
@@ -41,9 +41,7 @@ CentralController::AddTopologyInfo(int pairs[][3], int len)
 void
 CentralController::doUpdateRoutingTable()
 {
-    std::cout<<"doUpdateRoutingTable"<<std::endl;
     std::vector<Ipv4Address> nodeToIpAddress = netBuilder.getNodeToIpAddress();
-    PrintRoutingTable();
     // clear
     clearRoutingTable();
     
@@ -92,7 +90,6 @@ CentralController::clearRoutingTable()
         Ptr<Ipv4StaticRouting> staticRouting =
             staticRoutingHelper.GetStaticRouting(m_nodes.Get(i)->GetObject<Ipv4>());
         uint32_t num = staticRouting->GetNRoutes();
-        std::cout<<"node "<<i<<" has "<<num<<" routes"<<std::endl;
         for (uint32_t j = num-1; j > 0; j--)
         {
             std::ostringstream oss;
@@ -100,7 +97,6 @@ CentralController::clearRoutingTable()
             std::string dst = oss.str();
             if (dst[dst.length() - 1] != '0')
             {
-                std::cout<<staticRouting->GetRoute(j)<<std::endl;
                 staticRouting->RemoveRoute(j);
             }
         }
@@ -128,9 +124,7 @@ void
 CentralController::UpdateRoutingTable(std::string weightsData)
 {
     UpdateWeights(weightsData);
-    std::cout<<"UpdateWeights"<<std::endl;
     doUpdateRoutingTable();
-    std::cout<<"doUpdateRoutingTable"<<std::endl;
 }
 
 void
@@ -173,6 +167,7 @@ CentralController::ConcatLinkState(int i, int j, LinkState linkState)
     std::ostringstream oss;
     oss << i << " " << j << " "
         << avgDelay << " "
+        << linkState.bandwidth << " "
         << avgDropRate << " "
         << linkState.throughput 
         << "\n";

@@ -12,8 +12,7 @@ NetBuilder::init(int n)
 {
     c.Create(n);
     nodeToIpAddress = std::vector<Ipv4Address>(n);
-    p2p.SetDeviceAttribute("DataRate", DataRateValue(5000000));
-    p2p.SetChannelAttribute("Delay", TimeValue(MilliSeconds(2)));
+    adj = std::vector<std::vector<int>>(n, std::vector<int>(n, -1));
     InternetStackHelper internet;
     internet.Install(c);
     networkNumCt = 0;
@@ -22,44 +21,17 @@ NetBuilder::init(int n)
         std::vector<std::vector<int>> v;
         nodeInterfaces.push_back(v);
     }
-    linkStates = std::vector<std::vector<LinkState>>(n, std::vector<LinkState>(n, {0, 0, 0, 0, 0}));
-}
-
-void
-NetBuilder::randomRouting()
-{
-    if (!dst.IsInitialized())
-    {
-        std::cerr << "cannot set routes before nodes are connected" << std::endl;
-        return;
-    }
-    Ptr<Ipv4StaticRouting> staticRouting;
-    for (int i = 0; i < c.GetN() - 1; i++)
-    {
-        staticRouting = Ipv4RoutingHelper::GetRouting<Ipv4StaticRouting>(
-            c.Get(i)->GetObject<Ipv4>()->GetRoutingProtocol());
-
-        std::vector<int> arr;
-        for (auto v : nodeInterfaces[i])
-        {
-            // special rule
-            if (v[0] > i)
-            {
-                arr.push_back(v[1]);
-            }
-        }
-        int ifindex = randomPick(arr);
-        // std::cout<<"node "<<i<<", ifindex "<<ifindex<<std::endl;
-        staticRouting->AddHostRouteTo(dst, ifindex);
-    }
+    linkStates =
+        std::vector<std::vector<LinkState>>(n, std::vector<LinkState>(n, {0, 0, 0, 0, 0, 0}));
 }
 
 int
-NetBuilder::randomPick(std::vector<int> arr)
+NetBuilder::generateRandomInteger(int min, int max)
 {
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
-    int index = std::rand() % arr.size();
-    return arr[index];
+    Ptr<UniformRandomVariable> uv = CreateObject<UniformRandomVariable>();
+    uv->SetAttribute("Min", DoubleValue(min));
+    uv->SetAttribute("Max", DoubleValue(max));
+    return static_cast<int>(uv->GetValue());
 }
 
 std::string
@@ -90,7 +62,7 @@ NetBuilder::getNeighbor(int nodeIndex, int ifIndex)
 }
 
 void
-NetBuilder::connect(int i, int j)
+NetBuilder::simpleConnect(int i, int j)
 {
     if (i < 0 || i >= c.GetN() || j < 0 || j >= c.GetN())
     {
@@ -99,6 +71,18 @@ NetBuilder::connect(int i, int j)
         return;
     }
     NodeContainer net = NodeContainer(c.Get(i), c.Get(j));
+
+    // 设置信道
+    PointToPointHelper p2p;
+    // 5Mbps-500Mbps
+    int bandwidth = generateRandomInteger(5000000, 500000000);
+    p2p.SetDeviceAttribute("DataRate", DataRateValue(bandwidth));
+    linkStates[i][j].bandwidth = bandwidth;
+    linkStates[j][i].bandwidth = bandwidth;
+    // 1ms-100ms
+    int delay = generateRandomInteger(1, 100);
+    p2p.SetChannelAttribute("Delay", TimeValue(MilliSeconds(delay)));
+
     NetDeviceContainer ndc = p2p.Install(net);
     std::string ip = getIpBase();
     ipv4.SetBase(Ipv4Address(ip.data()), Ipv4Mask("255.255.255.0"));
@@ -126,11 +110,44 @@ NetBuilder::connect(int i, int j)
 }
 
 void
-NetBuilder::connect(int m[][2], int len)
+NetBuilder::connect(int i, int j)
 {
-    for (int i = 0; i < len; i++)
+    simpleConnect(i, j);
+    adj[i][j] = adj[j][i] = 1;
+}
+
+void
+NetBuilder::connect(int i, int j, int w)
+{
+    simpleConnect(i, j);
+    adj[i][j] = adj[j][i] = w;
+}
+
+void
+NetBuilder::connect(std::vector<std::vector<int>> graph)
+{
+    if (graph.empty())
     {
-        connect(m[i][0], m[i][1]);
+        std::cout << "NetBuilder::connect param empty" << std::endl;
+        return;
+    }
+    if (graph[0].size() == 3)
+    {
+        for (auto v : graph)
+        {
+            connect(v[0], v[1], v[2]);
+        }
+    }
+    else if (graph[0].size() == 2)
+    {
+        for (auto v : graph)
+        {
+            connect(v[0], v[1], 1);
+        }
+    }
+    else
+    {
+        std::cout << "The demention of NetBuilder::connect param should be 2 or 3" << std::endl;
     }
 }
 
@@ -174,43 +191,14 @@ void
 NetBuilder::GEANT2()
 {
     init(24);
-    int connectInfo[37][2] = {
+    std::vector<std::vector<int>> connectInfo = {
         {0, 1},   {0, 2},   {1, 3},   {1, 6},   {1, 9},   {2, 3},   {2, 4},   {3, 5},
         {3, 6},   {4, 7},   {5, 8},   {6, 8},   {6, 9},   {7, 8},   {7, 11},  {8, 11},
         {8, 12},  {8, 17},  {8, 18},  {8, 20},  {9, 10},  {9, 12},  {9, 13},  {10, 13},
         {11, 14}, {11, 20}, {12, 13}, {12, 19}, {12, 21}, {14, 15}, {15, 16}, {16, 17},
         {17, 18}, {18, 21}, {19, 23}, {21, 22}, {22, 23},
     };
-    connect(connectInfo, 37);
-}
-
-void
-NetBuilder::run()
-{
-    randomRouting();
-
-    uint16_t port = 9;
-    OnOffHelper onoff("ns3::UdpSocketFactory", Address(InetSocketAddress(dst, port)));
-    onoff.SetConstantRate(DataRate(6000));
-    ApplicationContainer apps = onoff.Install(c.Get(0));
-    apps.Start(Seconds(1.0));
-    apps.Stop(Seconds(3.0));
-
-    PacketSinkHelper sink("ns3::UdpSocketFactory",
-                          Address(InetSocketAddress(Ipv4Address::GetAny(), port)));
-    apps = sink.Install(c.Get(c.GetN() - 1));
-    apps.Start(Seconds(1.0));
-    apps.Stop(Seconds(3.0));
-
-    AsciiTraceHelper ascii;
-    p2p.EnableAsciiAll(ascii.CreateFileStream("eztop.tr"));
-
-    FlowMonitorHelper fmHelper; // 安装流监控器
-    Ptr<FlowMonitor> fm = fmHelper.InstallAll();
-
-    Simulator::Stop(Seconds(5));
-    Simulator::Run();
-    Simulator::Destroy();
+    connect(connectInfo);
 }
 
 int
@@ -240,12 +228,21 @@ NetBuilder::getNodes()
     return c;
 }
 
+std::vector<std::vector<int>>
+NetBuilder::getAdj()
+{
+    return adj;
+}
+
 void
 NetBuilder::installSendApp(int nodeIndex, int destIndex, Time startTime, Time endTime)
 {
     Ipv4Address dest = nodeToIpAddress[destIndex];
     OnOffHelper onoff("ns3::UdpSocketFactory", Address(InetSocketAddress(dest, port)));
-    onoff.SetConstantRate(DataRate(6000));
+    int datarate = generateRandomInteger(1000, 1000000);
+    onoff.SetConstantRate(DataRate(datarate));
+    int pktSize = generateRandomInteger(512, 6000);
+    onoff.SetAttribute("PacketSize", UintegerValue(pktSize));
     ApplicationContainer apps = onoff.Install(c.Get(nodeIndex));
     apps.Start(startTime);
     apps.Stop(endTime);
@@ -269,7 +266,7 @@ void
 NetBuilder::TxCallback(int nodeIndex, Ptr<const Packet> pkt, Ptr<Ipv4> ipv4, uint32_t i)
 {
     int next = getNeighbor(nodeIndex, i);
-    std::cout << "send: " << nodeIndex << " -> " << next << std::endl;
+    // std::cout << "send: " << nodeIndex << " -> " << next << std::endl;
     linkStates[nodeIndex][next].dropCount++;
     linkStates[nodeIndex][next].sendCount++;
     linkStates[nodeIndex][next].latestSendTime = Simulator::Now().GetMicroSeconds();
@@ -279,7 +276,7 @@ void
 NetBuilder::RxCallback(int nodeIndex, Ptr<const Packet> pkt, Ptr<Ipv4> ipv4, uint32_t i)
 {
     int pre = getNeighbor(nodeIndex, i);
-    std::cout << "rev: " << pre << " -> " << nodeIndex << std::endl;
+    // std::cout << "rev: " << pre << " -> " << nodeIndex << std::endl;
     linkStates[pre][nodeIndex].dropCount--;
     linkStates[pre][nodeIndex].throughput += pkt->GetSize();
     int64_t delay = Simulator::Now().GetMicroSeconds() - linkStates[pre][nodeIndex].latestSendTime;
@@ -319,10 +316,14 @@ NetBuilder::installReceiveApp(int nodeIndex, Time startTime, Time endTime)
     ApplicationContainer apps = sink.Install(c.Get(nodeIndex));
     apps.Start(startTime);
     apps.Stop(endTime);
-    // Ptr<PacketSink> sinkApp = DynamicCast<PacketSink> (apps.Get (0));
-    // Callback<void, Ptr<const Packet>, const Address &> callback =
-    // MakeCallback(&NetBuilder::RxCallback, this); sinkApp->TraceConnectWithoutContext ("Rx",
-    // MakeBoundCallback(&NetBuilder::RxCallback, nodeIndex));
+}
+
+void
+NetBuilder::installReceiveAppForAll(Time startTime, Time endTime)
+{
+    for(int i=0; i<c.GetN(); i++){
+        installReceiveApp(i, startTime, endTime);
+    }
 }
 
 void
@@ -331,7 +332,8 @@ NetBuilder::installReceiveApp(int nodeIndex)
     installReceiveApp(nodeIndex, defaultStartTime, defaultEndTime);
 }
 
-std::vector<std::vector<LinkState>> NetBuilder::getLinkStates()
+std::vector<std::vector<LinkState>>
+NetBuilder::getLinkStates()
 {
     return linkStates;
 }

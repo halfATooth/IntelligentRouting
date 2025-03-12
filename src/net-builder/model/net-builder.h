@@ -31,20 +31,22 @@ struct LinkState
     int dropCount = 0;
     int sendCount = 0;
     int throughput = 0;
+    int bandwidth = 0;
     int64_t latestSendTime = 0; // us
-    int64_t delay = 0;  // us
+    int64_t delay = 0;          // us
 };
 
 class NetBuilder
 {
   private:
     NodeContainer c;
-    PointToPointHelper p2p;
     Ipv4AddressHelper ipv4;
     int networkNumCt;
     // nodeInterfaces[i][j] = {k, ifindex} means: from node i to node k through port ifindex
     // nodeInterfaces[i].size() means: the num of neighbors of node i
     static std::vector<std::vector<std::vector<int>>> nodeInterfaces;
+    // 记录拓扑信息
+    std::vector<std::vector<int>> adj;
     // not necessary
     Ipv4Address dst;
     // record Ipv4Address on nodes
@@ -57,10 +59,11 @@ class NetBuilder
     static std::vector<std::vector<LinkState>> linkStates;
 
     void init(int n);
-    int randomPick(std::vector<int> arr);
     std::string getIpBase();
     static std::string getIpString(Ipv4Address ip);
+    void simpleConnect(int i, int j);
     static int getNeighbor(int nodeIndex, int ifIndex);
+    
     static void TxCallback(int nodeIndex, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
     static void RxCallback(int nodeIndex, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
 
@@ -74,21 +77,23 @@ class NetBuilder
         init(n);
     }
 
-    void randomRouting();
     void connect(int i, int j);
-    void connect(int m[][2], int len);
+    void connect(int i, int j, int w);
+    void connect(std::vector<std::vector<int>> graph);
     void quadConnect(int width);
     void cubeConnect(int x, int y);
     void GEANT2();
-    void run();
     int getPort(int from, int to);
     std::vector<Ipv4Address> getNodeToIpAddress();
     NodeContainer getNodes();
+    int generateRandomInteger(int min, int max);
+    std::vector<std::vector<int>> getAdj();
     void installSendApp(int srcIndex, int destIndex, Time startTime, Time endTime);
     void installSendApp(int srcIndex, int destIndex); // use default start/end time
     void installSendToAllApp(int srcIndex, Time startTime, Time endTime);
     void installSendToAllApp(int srcIndex); // use default start/end time
     void installReceiveApp(int nodeIndex, Time startTime, Time endTime);
+    void installReceiveAppForAll(Time startTime, Time endTime);
     void installReceiveApp(int nodeIndex); // use default start/end time
     void EnableForwardCallback();
     std::vector<std::vector<LinkState>> getLinkStates();

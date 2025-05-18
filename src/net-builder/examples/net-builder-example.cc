@@ -44,7 +44,7 @@ main(int argc, char* argv[])
     netBuilder.connect(2, 3);
 
     CentralController controller(netBuilder);
-    int pairs[][3] = {{0,1,1}, {0,2,1}, {1,3,2}, {2,3,1}};
+    std::vector<std::vector<int>> pairs = {{0,1,1}, {0,2,1}, {1,3,2}, {2,3,1}};
     controller.AddTopologyInfo(pairs, 4);
     controller.InitRoutingTable();
     controller.PrintRoutingTable();

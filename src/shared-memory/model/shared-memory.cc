@@ -130,7 +130,7 @@ void CommunicateWithAIModule::Listen(){
     int len = extractNumberAfterSlash(modSlashLen);
     std::string data = readSharedMemory(dataBlockInfo, len);
     UpdateRouting(data);
-    Simulator::Schedule(Seconds(5.0), &CommunicateWithAIModule::CollectAndSend, this);
+    Simulator::Schedule(Seconds(duration), &CommunicateWithAIModule::CollectAndSend, this);
   }else{
     Simulator::Schedule(MilliSeconds(50), &CommunicateWithAIModule::Listen, this);
   }
@@ -148,7 +148,7 @@ void CommunicateWithAIModule::CollectAndSend(){
 }
 
 void CommunicateWithAIModule::Start(){
-  Simulator::Schedule(Seconds(10), &CommunicateWithAIModule::CollectAndSend, this);
+  Simulator::Schedule(Seconds(duration), &CommunicateWithAIModule::CollectAndSend, this);
 }
 
 void CommunicateWithAIModule::writeSharedMemory(char* shm, std::string data){

@@ -31,8 +31,8 @@ class CommunicateWithAIModule
 private:
   const char* DATA_BLOCK_NAME = "/data_memory";
   const char* CONTROL_BLOCK_NAME = "/control_memory";
-  int DATA_BLOCK_SIZE = 1024;
-  int CONTROL_BLOCK_SIZE = 1024;
+  int DATA_BLOCK_SIZE = 10240;
+  int CONTROL_BLOCK_SIZE = 32;
   int duration = 10; // seconds
   int interval = 50; // ms
   BlockInfo dataBlockInfo;
